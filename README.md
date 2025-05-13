@@ -7,4 +7,4 @@ EasyState is a state container class for all kinds of state management.
 `easystate = "summerequinox/easystate@1.0.0"`
 
 #### API
-This section is still being constructed...
+[EasyState API](https://summerequinox.github.io/EasyState/)
