@@ -1,7 +1,7 @@
 --[[
-    SummerEquinox
-    EasyState
-    v1.0.0
+	SummerEquinox
+	EasyState
+	v1.0.0
 ]]
 
 --!strict
@@ -53,11 +53,6 @@ end
 	@class EasyState
 
 	EasyState is a state container class for all kinds of state management.
-
-	@field ClassName string
-	@field _value easyStateValue
-	@field _originalValue easyStateValue
-	@field _subscribers { [subcriberID]: subscriber }
 ]=]
 local EasyState = {}
 EasyState.__index = EasyState
@@ -99,7 +94,7 @@ end
 --[=[
 	@within EasyState
 
-    Gets the current value of the state.
+	Gets the current value of the state.
 
 	@return easyStateValue
 ]=]
@@ -114,7 +109,7 @@ end
 --[=[
 	@within EasyState
 
-    Gets the original value of the state.
+	Gets the original value of the state.
 
 	@return easyStateValue
 ]=]
@@ -129,7 +124,7 @@ end
 --[=[
 	@within EasyState
 
-    Sets the state to a new value.
+	Sets the state to a new value.
 
 	@param value easyStateValue
 ]=]
@@ -152,7 +147,7 @@ end
 --[=[
 	@within EasyState
 
-    Subscribes a callback to the state.
+	Subscribes a callback to the state.
 
 	@param callback subscriber
 	@return subcriberID
@@ -171,11 +166,11 @@ end
 --[=[
 	@within EasyState
 
-    Subscribes a callback to the state until a certain value is reached.
+	Subscribes a callback to the state until a certain value is reached.
 
-    @param callback subscriber
-    @param until easyStateValue
-    @return subcriberID
+	@param callback subscriber
+	@param untilValue easyStateValue
+	@return subcriberID
 ]=]
 function EasyState:SubscribeUntil(callback: subscriber, untilValue: easyStateValue): subcriberID
 	if type(callback) ~= "function" then
@@ -203,10 +198,10 @@ end
 --[=[
 	@within EasyState
 
-    Gets the status of a subscriber by its ID.
+	Gets the status of a subscriber by its ID.
 
-    @param subscriberID subcriberID
-    @return subscriptionState
+	@param subscriberID subcriberID
+	@return subscriptionState
 ]=]
 function EasyState:GetSubscriptionStatus(subscriberID: subcriberID): subscriptionState
 	if self._subscribers[subscriberID] then
@@ -221,7 +216,7 @@ end
 --[=[
 	@within EasyState
 
-    Unsubscribes a subscriber.
+	Unsubscribes a subscriber.
 
 	@param subcriberID subcriberID
 ]=]
@@ -237,10 +232,10 @@ end
 --[=[
 	@within EasyState
 
-    Unsubscribes a subscriber until a certain value is reached.
+	Unsubscribes a subscriber until a certain value is reached.
 
 	@param subscriberID subcriberID
-	@param until easyStateValue
+	@param untilValue easyStateValue
 	@param dropSubscriberAfter number
 ]=]
 function EasyState:UnsubscribeUntil(subscriberID: subcriberID, untilValue: easyStateValue, dropSubscriberAfter: number)
@@ -292,7 +287,7 @@ end
 --[=[
 	@within EasyState
 
-    Unsubscribes all subscribers. Suspended subscribers will still be re-subscribed if their condition is met.
+	Unsubscribes all subscribers. Suspended subscribers will still be re-subscribed if their condition is met.
 ]=]
 function EasyState:UnsubscribeAll()
 	self._subscribers = {}
@@ -301,7 +296,7 @@ end
 --[=[
 	@within EasyState
 
-    Resets the state to its original value.
+	Resets the state to its original value.
 ]=]
 function EasyState:Reset()
 	self:Set(self._originalValue)
