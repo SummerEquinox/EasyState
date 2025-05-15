@@ -1,7 +1,7 @@
 --[[
 	SummerEquinox
 	EasyState
-	v1.0.2
+	v1.1.0
 ]]
 
 --!strict
@@ -10,11 +10,37 @@
 
 local HttpService = game:GetService("HttpService")
 
-type subscriber = (any?) -> ...any
-type subcriberID = string
+--[=[
+	@within EasyState
+	@type EasyStateValue number | string | boolean | { [any]: any }
 
-type easyStateValue = number | string | boolean | { [any]: any }
-type subscriptionState = string
+	Represents the value of an EasyState object.
+]=]
+type EasyStateValue = number | string | boolean | { [any]: any }
+
+--[=[
+	@within EasyState
+	@type Subscriber (any?) -> ...any
+
+	Represents a function that will be called when the state changes.
+]=]
+type Subscriber = (EasyStateValue?) -> ...any
+
+--[=[
+	@within EasyState
+	@type SubscriberID unknown
+
+	Represents the ID of a subscriber.
+]=]
+type SubscriberID = typeof(newproxy(true))
+
+--[=[
+	@within EasyState
+	@type SubscriptionState "Active" | "Suspended" | "Inactive"
+
+	Represents the status of a subscriber.
+]=]
+type SubscriptionState = "Active" | "Suspended" | "Inactive"
 
 local e, w = error, warn
 
@@ -33,9 +59,9 @@ local WarnMessages = {
 }
 
 local SubscriptionState = {
-	Active = "Active",
-	Suspended = "Suspended",
-	Inactive = "Inactive",
+	Active = "Active" :: SubscriptionState,
+	Suspended = "Suspended" :: SubscriptionState,
+	Inactive = "Inactive" :: SubscriptionState,
 }
 
 local function auditInitialValue(value: any)
@@ -57,27 +83,34 @@ end
 local EasyState = {}
 EasyState.__index = EasyState
 EasyState.__metatable = "[EasyState]"
+EasyState.__call = function(self, newValue: EasyStateValue?)
+	if newValue then
+		self:Set(newValue)
+	else
+		self:Reset()
+	end
+end
 
 export type EasyState = typeof(setmetatable(
 	{} :: {
 		ClassName: string,
-		_value: easyStateValue,
-		_originalValue: easyStateValue,
-		_subscribers: { [subcriberID]: subscriber },
-		_suspendedSubscribers: { [subcriberID]: subscriber },
+		_value: EasyStateValue,
+		_originalValue: EasyStateValue,
+		_subscribers: { [SubscriberID]: Subscriber },
+		_suspendedSubscribers: { [SubscriberID]: Subscriber },
 	},
 	{} :: typeof(EasyState)
 ))
 
 --[=[
 	@within EasyState
-
-	EasyState is a state container class for all kinds of state management.
-
-	@param value easyStateValue
+	@function new
+	@param value EasyStateValue
 	@return EasyState
+
+	Creates a new EasyState instance with the given initial value.
 ]=]
-function EasyState.new(value: easyStateValue): EasyState
+function EasyState.new(value: EasyStateValue): EasyState
 	auditInitialValue(value)
 	local self = setmetatable({}, EasyState)
 
@@ -93,12 +126,11 @@ end
 
 --[=[
 	@within EasyState
+	@return EasyStateValue
 
 	Gets the current value of the state.
-
-	@return easyStateValue
 ]=]
-function EasyState:Get(): easyStateValue
+function EasyState:Get(): EasyStateValue
 	if type(self._originalValue) == "table" then
 		return table.clone(self._value)
 	end
@@ -108,12 +140,11 @@ end
 
 --[=[
 	@within EasyState
+	@return EasyStateValue
 
 	Gets the original value of the state.
-
-	@return easyStateValue
 ]=]
-function EasyState:GetOriginal(): easyStateValue
+function EasyState:GetOriginal(): EasyStateValue
 	if type(self._originalValue) == "table" then
 		return table.clone(self._originalValue)
 	end
@@ -123,14 +154,14 @@ end
 
 --[=[
 	@within EasyState
+	@param value EasyStateValue
 
 	Sets the state to a new value.
-
-	@param value easyStateValue
 ]=]
-function EasyState:Set(value: easyStateValue)
+function EasyState:Set(value: EasyStateValue)
 	if type(value) ~= type(self._originalValue) then
 		w(WarnMessages.UpdateTypeNoMatch)
+		return
 	end
 
 	self._value = value
@@ -146,18 +177,24 @@ end
 
 --[=[
 	@within EasyState
+	@param callback Subscriber
+	@return SubscriberID
 
 	Subscribes a callback to the state.
-
-	@param callback subscriber
-	@return subcriberID
 ]=]
-function EasyState:Subscribe(callback: subscriber): subcriberID
+function EasyState:Subscribe(callback: Subscriber): SubscriberID
 	if type(callback) ~= "function" then
 		e(ErrorMessages.InvalidSubscriberType)
 	end
 
-	local subscriberID = HttpService:GenerateGUID(false)
+	local subscriberID = newproxy(true)
+
+	local mt = getmetatable(subscriberID)
+	mt.__metatable = "[EasyState.SubscriberID]"
+	mt.__call = function()
+		self:Unsubscribe(subscriberID)
+	end
+
 	self._subscribers[subscriberID] = callback
 
 	return subscriberID
@@ -165,14 +202,13 @@ end
 
 --[=[
 	@within EasyState
+	@param callback Subscriber
+	@param untilValue EasyStateValue
+	@return SubscriberID
 
 	Subscribes a callback to the state until a certain value is reached.
-
-	@param callback subscriber
-	@param untilValue easyStateValue
-	@return subcriberID
 ]=]
-function EasyState:SubscribeUntil(callback: subscriber, untilValue: easyStateValue): subcriberID
+function EasyState:SubscribeUntil(callback: Subscriber, untilValue: EasyStateValue): SubscriberID
 	if type(callback) ~= "function" then
 		e(ErrorMessages.InvalidSubscriberType)
 	end
@@ -181,11 +217,16 @@ function EasyState:SubscribeUntil(callback: subscriber, untilValue: easyStateVal
 		e(ErrorMessages.Generic)
 	end
 
-	local subscriberID = HttpService:GenerateGUID(false)
-	self._subscribers[subscriberID] = callback
+	local subscriberID = newproxy(true)
+
+	local mt = getmetatable(subscriberID)
+	mt.__metatable = "[EasyState.SubscriberID]"
+	mt.__call = function()
+		self:Unsubscribe(subscriberID)
+	end
 
 	local deportID = nil
-	local deportID = self:Subscribe(function(value)
+	deportID = self:Subscribe(function(value)
 		if value == untilValue then
 			self:Unsubscribe(subscriberID)
 			self:Unsubscribe(deportID)
@@ -197,13 +238,12 @@ end
 
 --[=[
 	@within EasyState
+	@param subscriberID SubscriberID
+	@return SubscriptionState
 
 	Gets the status of a subscriber by its ID.
-
-	@param subscriberID subcriberID
-	@return subscriptionState
 ]=]
-function EasyState:GetSubscriptionStatus(subscriberID: subcriberID): subscriptionState
+function EasyState:GetSubscriptionStatus(subscriberID: SubscriberID): SubscriptionState
 	if self._subscribers[subscriberID] then
 		return SubscriptionState.Active
 	elseif self._suspendedSubscribers[subscriberID] then
@@ -215,12 +255,11 @@ end
 
 --[=[
 	@within EasyState
+	@param subcriberID SubscriberID
 
 	Unsubscribes a subscriber.
-
-	@param subcriberID subcriberID
 ]=]
-function EasyState:Unsubscribe(subcriberID: subcriberID)
+function EasyState:Unsubscribe(subcriberID: SubscriberID)
 	if not self._subscribers[subcriberID] then
 		w(WarnMessages.SubscriberNotFound)
 		return
@@ -231,20 +270,20 @@ end
 
 --[=[
 	@within EasyState
+	@param subscriberID SubscriberID
+	@param untilValue EasyStateValue
+	@param dropSubscriberAfter number
 
 	Unsubscribes a subscriber until a certain value is reached.
-
-	@param subscriberID subcriberID
-	@param untilValue easyStateValue
-	@param dropSubscriberAfter number
 ]=]
-function EasyState:UnsubscribeUntil(subscriberID: subcriberID, untilValue: easyStateValue, dropSubscriberAfter: number)
+function EasyState:UnsubscribeUntil(subscriberID: SubscriberID, untilValue: EasyStateValue, dropSubscriberAfter: number)
 	if type(untilValue) ~= type(self._originalValue) then
 		e(ErrorMessages.Generic)
 	end
 
 	if not self._subscribers[subscriberID] then
 		w(WarnMessages.SubscriberNotFound)
+		return
 	end
 
 	if self._suspendedSubscribers[subscriberID] then
@@ -262,7 +301,7 @@ function EasyState:UnsubscribeUntil(subscriberID: subcriberID, untilValue: easyS
 	self._suspendedSubscribers[subscriberID] = cachedSubscriber
 
 	local suspendedCaretakerID = nil
-	local suspendedCaretakerID = self:Subscribe(function(value)
+	suspendedCaretakerID = self:Subscribe(function(value)
 		local match = false
 		if type(value) == "table" and type(untilValue) == "table" then
 			match = HttpService:JSONEncode(value) == HttpService:JSONEncode(untilValue)

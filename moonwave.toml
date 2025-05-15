@@ -1,0 +1,5 @@
+gitRepoUrl = "https://github.com/SummerEquinox/EasyState"
+
+[home]
+enabled = true
+includeReadme = false
