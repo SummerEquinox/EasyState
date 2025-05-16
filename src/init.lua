@@ -1,7 +1,7 @@
 --[[
 	SummerEquinox
 	EasyState
-	v1.1.1
+	v1.1.3
 ]]
 
 --!strict
