@@ -1,7 +1,7 @@
 --[[
 	SummerEquinox
 	EasyState
-	v1.1.6
+	v1.2.0
 
     https://summerequinox.github.io/EasyState/api/EasyState/
 ]]
@@ -32,7 +32,7 @@ type Subscriber = (EasyStateValue?) -> ...any
 	@within EasyState
 	@type SubscriberID unknown
 
-	Represents the ID of a subscriber.
+	Represents the ID of a subscriber. This is actually userdata with an attached metatable.
 ]=]
 type SubscriberID = typeof(newproxy(true))
 
@@ -53,6 +53,7 @@ local ErrorMessages = {
 	NoInitialValue = "[EasyState Error] No initial EasyState value was provided.",
 	InvalidInitialValue = "[EasyState Error] Attempt to initialize using an invalid type.",
 	SubscriberAlreadySuspended = "[EasyState Error] The requested subscriber is already suspended.",
+	UnavaiableInMinified = "[EasyState Error] This function is not available in minified state objects.",
 }
 
 local WarnMessages = {
@@ -109,7 +110,7 @@ export type EasyState = typeof(setmetatable(
 	{} :: {
 		ClassName: string,
 		_value: EasyStateValue,
-		_originalValue: EasyStateValue,
+		_originalValue: EasyStateValue?,
 		_subscribers: { [SubscriberID]: Subscriber },
 		_suspendedSubscribers: { [SubscriberID]: Subscriber },
 	},
@@ -140,12 +141,32 @@ end
 
 --[=[
 	@within EasyState
+	@function mini
+	@param value EasyStateValue
+	@return EasyState
+
+	Creates a minified EasyState instance with the given initial value. Mini states take less memory, but restrict the use of some methods.
+]=]
+function EasyState.mini(value: EasyStateValue): EasyState
+	local self = setmetatable({}, EasyState)
+
+	self.ClassName = "EasyState"
+
+	self._value = value
+	self._subscribers = {}
+	self._suspendedSubscribers = {}
+
+	return self
+end
+
+--[=[
+	@within EasyState
 	@return EasyStateValue
 
 	Gets the current value of the state.
 ]=]
 function EasyState:Get(): EasyStateValue
-	if type(self._originalValue) == "table" then
+	if type(self._value) == "table" then
 		return deepCopy(self._value)
 	end
 
@@ -155,10 +176,15 @@ end
 --[=[
 	@within EasyState
 	@return EasyStateValue
+	@error Restricted Method Access  -- This method is unavailable to minified states.
 
 	Gets the original value of the state.
 ]=]
 function EasyState:GetOriginal(): EasyStateValue
+	if self._originalValue == nil then
+		e(ErrorMessages.UnavaiableInMinified)
+	end
+
 	if type(self._originalValue) == "table" then
 		return deepCopy(self._originalValue)
 	end
@@ -173,20 +199,20 @@ end
 	Sets the state to a new value.
 ]=]
 function EasyState:Set(value: EasyStateValue)
-	if type(value) ~= type(self._originalValue) then
+	if type(value) ~= type(self._value) then
 		w(WarnMessages.UpdateTypeNoMatch)
 		return
 	end
 
-	self._value = value
-
 	for _, subscriber in self._subscribers do
 		if type(value) == "table" then
-			subscriber(deepCopy(self._value))
+			subscriber(deepCopy(value))
 		else
-			subscriber(self._value)
+			subscriber(value)
 		end
 	end
+
+	self._value = value
 end
 
 --[=[
@@ -227,7 +253,7 @@ function EasyState:SubscribeUntil(callback: Subscriber, untilValue: EasyStateVal
 		e(ErrorMessages.InvalidSubscriberType)
 	end
 
-	if type(untilValue) ~= type(self._originalValue) then
+	if type(untilValue) ~= type(self._value) then
 		e(ErrorMessages.Generic)
 	end
 
@@ -290,10 +316,10 @@ end
 	@param untilValue EasyStateValue
 	@param dropSubscriberAfter number
 
-	Unsubscribes a subscriber until a certain value is reached.
+	Unsubscribes a subscriber until a certain value is reached. Optionally allows a custom number of updates to pass before completely dropping the re-subscription potential.
 ]=]
 function EasyState:UnsubscribeUntil(subscriberID: SubscriberID, untilValue: EasyStateValue, dropSubscriberAfter: number)
-	if type(untilValue) ~= type(self._originalValue) then
+	if type(untilValue) ~= type(self._value) then
 		e(ErrorMessages.Generic)
 	end
 
@@ -350,10 +376,15 @@ end
 
 --[=[
 	@within EasyState
+	@error Restricted Method Access  -- This method is unavailable to minified states.
 
 	Resets the state to its original value.
 ]=]
 function EasyState:Reset()
+	if self._originalValue == nil then
+		e(ErrorMessages.UnavaiableInMinified)
+	end
+
 	self:Set(self._originalValue)
 end
 
