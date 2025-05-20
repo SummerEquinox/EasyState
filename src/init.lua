@@ -1,7 +1,9 @@
 --[[
 	SummerEquinox
 	EasyState
-	v1.1.3
+	v1.1.4
+
+    https://summerequinox.github.io/EasyState/api/EasyState/
 ]]
 
 --!strict
@@ -74,6 +76,18 @@ local function auditInitialValue(value: any)
 	end
 end
 
+local function deepCopy(value: any)
+	if type(value) == "table" then
+		local newTable = {}
+		for key, value in pairs(value) do
+			newTable[key] = deepCopy(value)
+		end
+		return newTable
+	end
+
+	return value
+end
+
 -- Class Definition
 --[=[
 	@class EasyState
@@ -132,7 +146,7 @@ end
 ]=]
 function EasyState:Get(): EasyStateValue
 	if type(self._originalValue) == "table" then
-		return table.clone(self._value)
+		return deepCopy(self._value)
 	end
 
 	return self._value
@@ -146,7 +160,7 @@ end
 ]=]
 function EasyState:GetOriginal(): EasyStateValue
 	if type(self._originalValue) == "table" then
-		return table.clone(self._originalValue)
+		return deepCopy(self._originalValue)
 	end
 
 	return self._originalValue
@@ -168,7 +182,7 @@ function EasyState:Set(value: EasyStateValue)
 
 	for _, subscriber in self._subscribers do
 		if type(value) == "table" then
-			subscriber(table.clone(value))
+			subscriber(deepCopy(value))
 		else
 			subscriber(value)
 		end
