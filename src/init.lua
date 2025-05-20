@@ -1,7 +1,7 @@
 --[[
 	SummerEquinox
 	EasyState
-	v1.1.5
+	v1.1.6
 
     https://summerequinox.github.io/EasyState/api/EasyState/
 ]]
@@ -182,9 +182,9 @@ function EasyState:Set(value: EasyStateValue)
 
 	for _, subscriber in self._subscribers do
 		if type(value) == "table" then
-			subscriber(deepCopy(value))
+			subscriber(deepCopy(self._value))
 		else
-			subscriber(value)
+			subscriber(self._value)
 		end
 	end
 end
