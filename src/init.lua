@@ -1,7 +1,7 @@
 --[[
 	SummerEquinox
 	EasyState
-	v1.1.4
+	v1.1.5
 
     https://summerequinox.github.io/EasyState/api/EasyState/
 ]]
@@ -238,6 +238,8 @@ function EasyState:SubscribeUntil(callback: Subscriber, untilValue: EasyStateVal
 	mt.__call = function()
 		self:Unsubscribe(subscriberID)
 	end
+
+	self._subscribers[subscriberID] = callback
 
 	local deportID = nil
 	deportID = self:Subscribe(function(value)

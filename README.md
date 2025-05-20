@@ -4,7 +4,7 @@
 EasyState is a state container class for all kinds of state management.
 
 #### Wally
-`easystate = "summerequinox/easystate@1.1.4"`
+`easystate = "summerequinox/easystate@1.1.5"`
 
 #### API
 [EasyState API](https://summerequinox.github.io/EasyState/)
