@@ -5,9 +5,6 @@
 /*.rbxlx.lock
 /*.rbxl.lock
 
-# Moonwave build folder
-build
-
 # Other
 docs
 .moonwave
