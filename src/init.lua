@@ -1,9 +1,7 @@
 --[[
 	SummerEquinox
-	EasyState
-	v1.2.0
 
-    https://summerequinox.github.io/EasyState/api/EasyState/
+	EasyState is a state container class for all kinds of state management. [Release: 1.2.1]
 ]]
 
 --!strict
@@ -22,19 +20,19 @@ type EasyStateValue = number | string | boolean | { [any]: any }
 
 --[=[
 	@within EasyState
-	@type Subscriber (any?) -> ...any
+	@type Subscriber (number | string | boolean | { [any]: any })? -> ...any
 
 	Represents a function that will be called when the state changes.
 ]=]
-type Subscriber = (EasyStateValue?) -> ...any
+type SubscriberCallback = (EasyStateValue) -> ...any
 
 --[=[
 	@within EasyState
-	@type SubscriberID unknown
+	@type SubscriberID userdata
 
-	Represents the ID of a subscriber. This is actually userdata with an attached metatable.
+	Represents the ID of a subscriber.
 ]=]
-type SubscriberID = typeof(newproxy(true))
+type SubscriberID = unknown
 
 --[=[
 	@within EasyState
@@ -46,7 +44,10 @@ type SubscriptionState = "Active" | "Suspended" | "Inactive"
 
 local e, w = error, warn
 
-local ErrorMessages = {
+--[[
+	Enum for the error messages.
+]]
+local ErrorMessages = table.freeze({
 	Generic = "[EasyState Error] An error occurred.",
 	InvalidSubscriberType = "[EasyState Error] A valid subscriber should be a callback function.",
 	TryChangeType = "[EasyState Error] EasyState objects are type-locked once created.",
@@ -54,19 +55,29 @@ local ErrorMessages = {
 	InvalidInitialValue = "[EasyState Error] Attempt to initialize using an invalid type.",
 	SubscriberAlreadySuspended = "[EasyState Error] The requested subscriber is already suspended.",
 	UnavaiableInMinified = "[EasyState Error] This function is not available in minified state objects.",
-}
+	Frozen = "[EasyState Error] This state is frozen and cannot be changed.",
+})
 
-local WarnMessages = {
+--[[
+	Enum for the warning messages.
+]]
+local WarnMessages = table.freeze({
 	SubscriberNotFound = "[EasyState Warning] Could not find the requested subscriber.",
 	UpdateTypeNoMatch = "[EasyState Warning] Attempt to run :Set() with a new value of a different type. Request will be dropped.",
-}
+})
 
-local SubscriptionState = {
+--[[
+	Enum for the subscription state.
+]]
+local SubscriptionState = table.freeze({
 	Active = "Active" :: SubscriptionState,
 	Suspended = "Suspended" :: SubscriptionState,
 	Inactive = "Inactive" :: SubscriptionState,
-}
+})
 
+--[[
+	Function to audit the initial value.
+]]
 local function auditInitialValue(value: any)
 	if value == nil then
 		e(ErrorMessages.NoInitialValue)
@@ -77,6 +88,9 @@ local function auditInitialValue(value: any)
 	end
 end
 
+--[[
+	Function to deep copy a table.
+]]
 local function deepCopy(value: any)
 	if type(value) == "table" then
 		local newTable = {}
@@ -89,7 +103,6 @@ local function deepCopy(value: any)
 	return value
 end
 
--- Class Definition
 --[=[
 	@class EasyState
 
@@ -97,7 +110,7 @@ end
 ]=]
 local EasyState = {}
 EasyState.__index = EasyState
-EasyState.__metatable = "[EasyState]"
+EasyState.__metatable = "This metatable is protected."
 EasyState.__call = function(self, newValue: EasyStateValue?)
 	if newValue then
 		self:Set(newValue)
@@ -106,33 +119,73 @@ EasyState.__call = function(self, newValue: EasyStateValue?)
 	end
 end
 
-export type EasyState = typeof(setmetatable(
+--[[
+	EasyState type.
+]]
+type EasyState = typeof(setmetatable(
 	{} :: {
-		ClassName: string,
 		_value: EasyStateValue,
 		_originalValue: EasyStateValue?,
-		_subscribers: { [SubscriberID]: Subscriber },
-		_suspendedSubscribers: { [SubscriberID]: Subscriber },
+		_subscribers: { [SubscriberID]: SubscriberCallback },
+		_suspendedSubscribers: { [SubscriberID]: SubscriberCallback },
 	},
 	{} :: typeof(EasyState)
+))
+
+-- Hacky way to make a mini state type that doesn't have the restricted methods without actually running extra code.
+--[[
+	EasyStateMini type.
+]]
+type EasyStateMini = typeof(setmetatable(
+	{} :: {
+		_value: EasyStateValue,
+		_subscribers: { [SubscriberID]: SubscriberCallback },
+		_suspendedSubscribers: { [SubscriberID]: SubscriberCallback },
+	},
+	{} :: typeof((function()
+		local mt = table.clone(EasyState)
+		mt.GetOriginal = nil :: never
+		mt.Reset = nil :: never
+		mt.__call = function(self, newValue: EasyStateValue?)
+			if newValue then
+				self:Set(newValue)
+			else
+				error(ErrorMessages.UnavaiableInMinified)
+			end
+		end
+		return mt
+	end)())
 ))
 
 --[=[
 	@within EasyState
 	@function new
-	@param value EasyStateValue
+	@param value boolean | number | string | { [any]: any }
 	@return EasyState
 
 	Creates a new EasyState instance with the given initial value.
+
+	:::caution
+	It should be noted that EasyState deep clones on all accounts when working with tables. Do not expect external table updates to trigger subscribers.
+	You are completely unable to access the deep cloned table by normal means. Updates for table-types must be done with `:Set()` if subscribers are to fire.
+	:::
+
+	```lua
+	local foo = {}
+	print(foo) -- {} (table: 0x4324234234)
+
+	local state = EasyState.new(foo)
+	foo.bar = 'baz'
+
+	print(state:Get()) -- {} (table: 0x12321321321)
+	```
 ]=]
 function EasyState.new(value: EasyStateValue): EasyState
 	auditInitialValue(value)
 	local self = setmetatable({}, EasyState)
 
-	self.ClassName = "EasyState"
-
-	self._value = value
-	self._originalValue = value
+	self._value = if type(value) == "table" then deepCopy(value) else value
+	self._originalValue = self._value
 	self._subscribers = {}
 	self._suspendedSubscribers = {}
 
@@ -142,19 +195,25 @@ end
 --[=[
 	@within EasyState
 	@function mini
-	@param value EasyStateValue
+	@param value boolean | number | string | { [any]: any }
 	@return EasyState
 
 	Creates a minified EasyState instance with the given initial value. Mini states take less memory, but restrict the use of some methods.
+	Methods which are restricted to mini-states have it noted in their documentation and docstrings.
+
+	:::caution
+	Please see warning in the `.new` documentation for information on working with table-type EasyState objects.
+	:::
 ]=]
-function EasyState.mini(value: EasyStateValue): EasyState
-	local self = setmetatable({}, EasyState)
-
-	self.ClassName = "EasyState"
-
-	self._value = value
-	self._subscribers = {}
-	self._suspendedSubscribers = {}
+function EasyState.mini(value: EasyStateValue): EasyStateMini
+	auditInitialValue(value)
+	local self = (
+		setmetatable({
+			_value = if type(value) == "table" then deepCopy(value) else value,
+			_subscribers = {},
+			_suspendedSubscribers = {},
+		}, EasyState) :: any
+	) :: EasyStateMini
 
 	return self
 end
@@ -204,6 +263,10 @@ function EasyState:Set(value: EasyStateValue)
 		return
 	end
 
+	if self["_frozen"] then
+		e(ErrorMessages.Frozen)
+	end
+
 	for _, subscriber in self._subscribers do
 		if type(value) == "table" then
 			subscriber(deepCopy(value))
@@ -222,7 +285,7 @@ end
 
 	Subscribes a callback to the state.
 ]=]
-function EasyState:Subscribe(callback: Subscriber): SubscriberID
+function EasyState:Subscribe(callback: SubscriberCallback): SubscriberID
 	if type(callback) ~= "function" then
 		e(ErrorMessages.InvalidSubscriberType)
 	end
@@ -230,7 +293,7 @@ function EasyState:Subscribe(callback: Subscriber): SubscriberID
 	local subscriberID = newproxy(true)
 
 	local mt = getmetatable(subscriberID)
-	mt.__metatable = "[EasyState.SubscriberID]"
+	mt.__metatable = "This metatable is protected."
 	mt.__call = function()
 		self:Unsubscribe(subscriberID)
 	end
@@ -248,7 +311,7 @@ end
 
 	Subscribes a callback to the state until a certain value is reached.
 ]=]
-function EasyState:SubscribeUntil(callback: Subscriber, untilValue: EasyStateValue): SubscriberID
+function EasyState:SubscribeUntil(callback: SubscriberCallback, untilValue: EasyStateValue): SubscriberID
 	if type(callback) ~= "function" then
 		e(ErrorMessages.InvalidSubscriberType)
 	end
@@ -260,7 +323,7 @@ function EasyState:SubscribeUntil(callback: Subscriber, untilValue: EasyStateVal
 	local subscriberID = newproxy(true)
 
 	local mt = getmetatable(subscriberID)
-	mt.__metatable = "[EasyState.SubscriberID]"
+	mt.__metatable = "This metatable is protected."
 	mt.__call = function()
 		self:Unsubscribe(subscriberID)
 	end
@@ -355,6 +418,7 @@ function EasyState:UnsubscribeUntil(subscriberID: SubscriberID, untilValue: Easy
 			self:Unsubscribe(suspendedCaretakerID)
 			self._subscribers[subscriberID] = cachedSubscriber
 			self._suspendedSubscribers[subscriberID] = nil
+			return
 		end
 
 		updateCount += 1
@@ -386,6 +450,33 @@ function EasyState:Reset()
 	end
 
 	self:Set(self._originalValue)
+end
+
+--[=[
+	@within EasyState
+
+	Freezes the state so that it cannot be changed.
+]=]
+function EasyState:Freeze()
+	self._frozen = true
+end
+
+--[=[
+	@within EasyState
+
+	Unfreezes the state so that it can be changed again.
+]=]
+function EasyState:Unfreeze()
+	self._frozen = nil
+end
+
+--[=[
+	@within EasyState
+
+	Checks if the state is frozen.
+]=]
+function EasyState:IsFrozen(): boolean
+	return rawget(self, "_frozen") ~= nil
 end
 
 return EasyState

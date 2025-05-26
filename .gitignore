@@ -7,4 +7,5 @@
 
 # Other
 docs
+build/*
 .moonwave

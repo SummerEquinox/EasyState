@@ -1,8 +1,9 @@
 [package]
 name = "summerequinox/easystate"
-version = "1.2.0"
+version = "1.2.1"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 include = ["src", "src/**", "default.project.json"]
 exclude = ["build", ".vscode", ".github", "*.md", "*.rbxl", "*.rbxlx", "*.lock", "*.gitignore", "tests", "examples", "docs"]
 authors = ["SummerEquinox"]
+description = "EasyState is a state container class for all kinds of state management."
